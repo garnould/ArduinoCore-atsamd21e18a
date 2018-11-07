@@ -86,6 +86,7 @@ void FemtoCore::init(int appAddress, int destAddress, int appEndpoint, int appPa
 
     #ifdef ENABLE_SERIAL
         _setupSerial();
+        Serial.println("FemtoCore::init() > Serial complete.");
     #endif
 
     _setupRGB();
@@ -166,7 +167,7 @@ char* FemtoCore::getDataFlowCommand() {
 
 void FemtoCore::handleRGB() {
     _rgbCurrentTick = micros();
-  
+
     if (_rgbCurrentTick > _rgbLastTick + 1) {
         _rgbLastTick = _rgbCurrentTick;
 
@@ -298,11 +299,11 @@ void FemtoCore::_HSV_to_RGB(float H, float S, float V, byte* r, byte* g, byte* b
 
 
 void FemtoCore::_setupRGB() {
-    
+
     // Start up the clock used to emulate PWM control of our RGB LED pins.
     tcConfigure(FEMTO_RGB_MAX_DUTY_CYCLE);
     tcStartCounter();
-  
+
     // Initialize our tick counters.
     _rgbCurrentTick = micros();
     _rgbLastTick = FemtoCore::_rgbCurrentTick;
@@ -562,7 +563,7 @@ bool FemtoCore::_networkingReceiveMessage(NWK_DataInd_t *ind) {
         Serial.println(" Processing...");
     #endif
 
-    
+
     if (first_char == '=') {
         // This is a reply. Output to Serial with new line
         #ifdef ENABLE_SERIAL
@@ -604,7 +605,7 @@ void FemtoCore::handleNetworking() {
 
 void FemtoCore::handleRepeatCommand() {
     // if (!_networking_is_busy_sending) {
-        
+
         #ifdef DEBUG
             Serial.print("FemtoCore::handleNetworking() repeat command enabled. Command is ");
             Serial.println(_data_flow_command);
@@ -682,8 +683,8 @@ void FemtoCore::send(char* data, int destNodeAddress, int destNodeEndpoint, bool
             // On final loop, copy the left over bits only (to avoid copying outside the data size)
             if (leftover_size > 0 && start_index < (buffer_size - (buffer_size % chunk_size)) - chunk_size) {
                 memcpy(
-                    tempBuffer, 
-                    data + start_index, 
+                    tempBuffer,
+                    data + start_index,
                     (buffer_size % chunk_size));
             } else {
             // Copy in chunks sized chunk_size
@@ -703,9 +704,9 @@ void FemtoCore::send(char* data, int destNodeAddress, int destNodeEndpoint, bool
             #endif
             tempBufferPointer = (char*) tempBuffer;
             _networkingSendMessage(tempBufferPointer, destNodeAddress, destNodeEndpoint, requireConfirm);
-            
+
             // Clear out the temp buffer
-            
+
 
             // Wait for confirm if required before sending next chunk.
             if (requireConfirm) {
@@ -723,7 +724,7 @@ void FemtoCore::send(char* data, int destNodeAddress, int destNodeEndpoint, bool
                         break;
                     }
                 }
-                
+
             } else {
                 memset(tempBuffer, 0, sizeof(tempBuffer));
             }
@@ -739,7 +740,7 @@ void FemtoCore::send(char* data, int destNodeAddress, int destNodeEndpoint, bool
             Serial.print(strlen(data));
             Serial.println(").");
         #endif
-        
+
         // char charData[APP_BUFFER_SIZE];
         // memcpy(charData, data, strlen(data));
 
@@ -794,7 +795,7 @@ void FemtoCore::_networkingSendMessage(char* bufferData, int destNodeAddress, in
     _sendRequest.dstEndpoint   = destNodeEndpoint; // Endpoint number on destination device
     _sendRequest.srcEndpoint   = _appEndpoint; // Local Endpoint number
 
-    _sendRequest.options       = (requireConfirm ? 
+    _sendRequest.options       = (requireConfirm ?
                                     NWK_IND_OPT_ACK_REQUESTED : // Default to acknowledge request flag
                                     0 // Just broadcast.
                                  );
@@ -809,7 +810,7 @@ void FemtoCore::_networkingSendMessage(char* bufferData, int destNodeAddress, in
 
     // if (requireConfirm) {
     //     _sendRequest.options      |= NWK_IND_OPT_ACK_REQUESTED; // Assert acknowledge request flag.
-        
+
     // }
     _sendRequest.confirm       = _networkingSendMessageConfirm;
 
@@ -909,48 +910,68 @@ void FemtoCore::handleSerial() {
 }
 
 void FemtoCore::handleSerialRx() {
-    
-    // @TODO Clean up this kludge. Figure out why we get garbage on the receiving node when size is < 8.
 
-    // Send it. See https://coderwall.com/p/zfmwsg/arduino-string-to-char
-    char input_buffer[APP_BUFFER_SIZE] = "";
-    char* input_buffer_pointer = (char*) input_buffer;
+    char input_buffer[APP_BUFFER_SIZE] ;
 
-    inputString.toCharArray(input_buffer, inputString.length());
-    input_buffer[inputString.length() + 1] = (char) 0; // add null-terminator
+    if ( inputString.length() > (sizeof(input_buffer)-1) ) {
+      // won't have enough space to memcpy
 
-    // char* input_string = const_cast<char*>(inputString.c_str());
-    String cmd = inputString.substring(1); // Grab stuff after the first char.
-    
-    char data[APP_BUFFER_SIZE];
-    char* data_pointer = (char*) data;
+      #ifdef DEBUG
+        Serial.print("FemtoCore::handleSerialRx() inputString data is TOO LONG (");
+        Serial.print(inputString);
+        Serial.print(") length is: ");
+        Serial.print(inputString.length());
+        Serial.print(", max is is: ");
+        Serial.println(sizeof(input_buffer)-1);
+      #endif
 
-    cmd.toCharArray(data, cmd.length());
-    data[cmd.length() + 1] = (char) 0; // add null-terminator
+      // resetting input
+      FemtoCore::stringComplete = false;
+      inputString = "";
+      return;
+    }
 
-    
+    memset(input_buffer, '\0', sizeof(input_buffer)) ;
+    memcpy(input_buffer, inputString.c_str(), inputString.length()) ; // \0 set at memset time
 
     #ifdef DEBUG
-        Serial.print("FemtoCore::handleSerialRx() input data (");
+        Serial.print("FemtoCore::handleSerialRx() inputString data (");
         Serial.print(inputString);
-        Serial.print(") is: ");
+        Serial.print(") length is: ");
         Serial.println(inputString.length());
-        Serial.print("FemtoCore::handleSerialRx() without first char is ");
-        Serial.println(cmd);
+
+        Serial.print("FemtoCore::handleSerialRx() input_buffer data (");
+        Serial.print(input_buffer);
+        Serial.print(") length is: ");
+	Serial.println(strlen(input_buffer));
+
+        Serial.print("FemtoCore::handleSerialRx() first char is ");
+	Serial.println(input_buffer[0]);
+
+        Serial.print("FemtoCore::handleSerialRx() buffer at +1 is ");
+	Serial.println((char *)(input_buffer+1));
     #endif
+
     // refactor into processCommand() call.
     if ((char)input_buffer[0] == ':') {
-        
+
         // Send to currently set destination node ID.
         // processCommand(input_string, 0x00, 0x01, _destAddress);
-        send(data_pointer);
+      send((char *)(input_buffer+1));
     } else if ((char)input_buffer[0] == '>') {
         // From Serial, To Network (broadcast). No dest node ID
         // processCommand(input_string, 0x00, 0x02, 0x00);
-        broadcast(data_pointer);
+        broadcast((char *)(input_buffer+1));
     } else {
         // From Serial, To Serial. No dest node ID.
-        processCommand(input_buffer_pointer, 0x00, 0x00, 0x00);
+
+        #ifdef DEBUG
+           Serial.print("FemtoCore::handleSerialRx() processing command (");
+	   Serial.print(input_buffer) ;
+           Serial.println(") locally");
+	#endif
+
+        processCommand(input_buffer, 0x00, 0x00, 0x00);
     }
 
     FemtoCore::stringComplete = false;
@@ -992,7 +1013,7 @@ void FemtoCore::sleep() {
 
         // Setup Sensor wake interrupt if requested.
         if ((_sleep_mode & FEMTO_WAKE_TRIGGER_SENSOR) == FEMTO_WAKE_TRIGGER_SENSOR) {
-            
+
             #ifdef DEBUG
                 Serial.print("FemtoCore::sleep() Wake trigger sensor set");
                 Serial.print(" (");
@@ -1022,11 +1043,11 @@ void FemtoCore::sleep() {
         delay(1000); // 1000
     #endif
 
-    
+
     _should_be_sleeping = true;
 
-    
-    // Setup timed wake (RTC based) if requested. 
+
+    // Setup timed wake (RTC based) if requested.
     if ((_sleep_mode & FEMTO_WAKE_TRIGGER_TIME) == FEMTO_WAKE_TRIGGER_TIME) {
         if (!_is_rtc_started) {
             _setupRTC();
@@ -1062,7 +1083,7 @@ void FemtoCore::_wakeTriggerSensor() {
         if (freeIMU.accgyro.getIntMotionEnabled() == 0) {
             freeIMU.accgyro.setIntMotionEnabled(true);
         }
-    } 
+    }
     else if ((_sensor_interrupt_source | FEMTO_SENSOR_INT_ZERO_MOTION) == FEMTO_SENSOR_INT_ZERO_MOTION) {
         // On zero-motion
         if (freeIMU.accgyro.getIntZeroMotionEnabled() == 0) {
@@ -1166,7 +1187,7 @@ void FemtoCore::networkWakeEvent() {
 
 // Internally called by the sleep() command only.
 void FemtoCore::sleepNetwork() {
-    
+
     #ifdef DEBUG
         Serial.print("FemtoCore::sleepNetwork() Internal AT86RF233 module going into standby mode...");
     #endif
@@ -1215,7 +1236,7 @@ void FemtoCore::_wakeTriggerTime() {
     rtc.standbyMode();
     // ---- Standby mode execution END   -----
 
-    
+
     if (_should_be_sleeping) { // Not awake yet? wake up!
         wakeUp();
     }
@@ -1231,7 +1252,7 @@ void FemtoCore::wakeUp() {
 
     // Re-enable Serial if it was enabled before.
     #ifdef ENABLE_SERIAL
-        
+
         while(!Serial);
 
 
@@ -1240,7 +1261,7 @@ void FemtoCore::wakeUp() {
             Serial.println("FemtoCore::wakeUp() Woke up!");
             Serial.end();
         #endif
-        
+
     #endif
 
     // Start up the clock used to emulate PWM control of our RGB LED pins.
@@ -1260,7 +1281,7 @@ void FemtoCore::wakeUp() {
             // Serial.end();
         #endif
     }
-    
+
     #ifdef DEBUG
         Serial.println("FemtoCore::wakeUp() complete.");
     #endif
@@ -1274,7 +1295,7 @@ bool FemtoCore::getIsNetworkBusy() {
 }
 
 void FemtoCore::sendSampleLegacy(byte input_from, byte output_to, int to_node_id) {
-    
+
     float ypr[3]; // Hold the YPR data (YPR 180 deg)
     float eulers[3]; // Hold the Euler angles (360 deg)
     float values[10]; // Raw values from FreeIMU
@@ -1345,11 +1366,11 @@ void FemtoCore::sendSampleLegacy(byte input_from, byte output_to, int to_node_id
         Serial.print(c_accel_y); Serial.print(',');
         Serial.println(c_accel_z);
     #endif
-    sprintf(data, 
-        "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\0", 
-        c_current_ms, 
-        c_yaw, c_pitch, c_roll, 
-        c_euler1, c_euler2, c_euler3, 
+    sprintf(data,
+        "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\0",
+        c_current_ms,
+        c_yaw, c_pitch, c_roll,
+        c_euler1, c_euler2, c_euler3,
         c_accel_x, c_accel_y, c_accel_z);
 
     // Send away.
@@ -1369,7 +1390,7 @@ void FemtoCore::sendSampleLegacy(byte input_from, byte output_to, int to_node_id
     memset((char*)c_accel_z, 0, sizeof(c_accel_z));
 }
 /**
- * Process a command. 
+ * Process a command.
  * @param char* cmd Pointer to the char array representing the command
  * @param byte  input_from Zero (0) means Serial, One (1) means network node.
  * @param byte  output_to Zero (0) means Serial (without new line), One (1) means Serial (with new line), Two (2) means network (direct), Three (3) means network (broadcast)
@@ -1379,24 +1400,31 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
 
     int command_size = strlen(command_chars);
     // char cmd = (char)command_chars[0];
-    
-    
+
+
     String command = String(command_chars);
     char cmd = command.charAt(0);
 
     #ifdef DEBUG
         Serial.print("FemtoCore::processCommand got (");
-        Serial.print(command.length());
-        Serial.print(") ");
+        Serial.print(command);
+        Serial.print("), length :");
         Serial.println(command);
 
+        Serial.print("FemtoCore::processCommand is_femtobeacon_coin : ");
+        Serial.println(is_femtobeacon_coin);
     #endif
 
     if (is_femtobeacon_coin) {
 
+        #ifdef DEBUG
+            Serial.println("FemtoCore::processCommand checking for only 'is_femtobeacon_coin' commands");
+        #endif
+
+
         // FreeIMU command.
         if(cmd=='v') {
-            char* buffer = output_to > 0 ? _free_imu_network_data : _free_imu_serial_data;
+	  char* buffer = (output_to > 0) ? _free_imu_network_data : _free_imu_serial_data;
 
             sprintf(buffer, "FemtoCore %s.%s.%s. FreeIMU by %s, FREQ:%s, LIB_VERSION: %s, IMU: %s", FEMTO_SEMVER_MAJOR, FEMTO_SEMVER_MINOR, FEMTO_SEMVER_PATCH, FREEIMU_DEVELOPER, FREEIMU_FREQ, FREEIMU_LIB_VERSION, FREEIMU_ID);
             // Serial.print(_free_imu_serial_data);
@@ -1509,7 +1537,7 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
                   toPrintableArr(_free_imu_raw_values, 6, sizeof(int), buffer);
                 #elif HAS_ALTIMU10() || HAS_ADA_10_DOF()
                   freeIMU.getRawValues(_free_imu_raw_values);
-                  // writeArr(_free_imu_raw_values, 9, sizeof(int)); // writes accelerometer, gyro values & mag of Altimu 10        
+                  // writeArr(_free_imu_raw_values, 9, sizeof(int)); // writes accelerometer, gyro values & mag of Altimu 10
                   toPrintableArr(_free_imu_raw_values, 9, sizeof(int), buffer);
                 #endif
 
@@ -1545,8 +1573,8 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
 
             for(uint8_t i=0; i<count; i++) {
                 freeIMU.getQ(_free_imu_quaternions, _free_imu_val);
-                val_array[15] = freeIMU.sampleFreq;        
-                //freeIMU.getValues(_free_imu_val);       
+                val_array[15] = freeIMU.sampleFreq;
+                //freeIMU.getValues(_free_imu_val);
                 val_array[7] = (_free_imu_val[3] * M_PI/180); // gyro X
                 val_array[8] = (_free_imu_val[4] * M_PI/180); // gyro Y
                 val_array[9] = (_free_imu_val[5] * M_PI/180); // gyro Z
@@ -1575,7 +1603,7 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
                    val_array[13] = ((float) freeIMU.DTemp) / 333.87 + 21.0;
                 #elif HAS_LSM9DS0()
                     val_array[13] = 21.0 + (float) freeIMU.DTemp/8.; //degrees C
-                #elif HAS_LSM9DS1()    
+                #elif HAS_LSM9DS1()
                     val_array[13] = ((float) freeIMU.DTemp/256. + 25.0); //degrees C
                 #elif HAS_ITG3200()
                    val_array[13] = freeIMU.rt;
@@ -1638,8 +1666,8 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
 
                 val_array[16] = _free_imu_val[9]; // mag heading
                 val_array[18] = _free_imu_val[11]; // motion detect value
-                        
-                #if HAS_PRESS() 
+
+                #if HAS_PRESS()
                    // with baro
                    val_array[17] = _free_imu_val[10]; // estimated altitude
                    val_array[13] = (freeIMU.getBaroTemperature());
@@ -1650,7 +1678,7 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
                    val_array[13] = ((float) freeIMU.DTemp) / 333.87 + 21.0;
                 #elif HAS_LSM9DS0()
                     val_array[13] = 21.0 + (float) freeIMU.DTemp/8.; //degrees C
-                #elif HAS_LSM9DS1()    
+                #elif HAS_LSM9DS1()
                     val_array[13] = ((float) freeIMU.DTemp/256. + 25.0); //degrees C
                 #elif HAS_ITG3200()
                    val_array[13] = freeIMU.rt;
@@ -1698,7 +1726,7 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
         //     setRGB(0x00, 0xff, 0x00, false);
         //     delay(1000);
         //     setRGB(0x00, 0x00, 0x00, false);
-        // } 
+        // }
         // else if(cmd == 'x') {
         //     EEPROM.write(FREEIMU_EEPROM_BASE, 0); // reset signature
         //     freeIMU.calLoad(); // reload calibration
@@ -1874,6 +1902,11 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
             sendSampleLegacy(input_from, output_to, to_node_id);
         }
     }
+
+    #ifdef DEBUG
+        Serial.println("FemtoCore::processCommand checking for common commands");
+    #endif
+
     // SET_NODE_ID:0x0001 Where range is 0x0001 to 0xfffe. 0xffff is reserved for broadcasts.
     if (command.startsWith("SET_NODE_ID:")) {
         int node_id = hexToDec(inputString.substring(14)); // Discard 0x chars
@@ -2063,7 +2096,7 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
             }
         #endif
         setDataFlow(data_flow);
-        
+
         _reply("SET_REPEAT:OK", output_to < 1 ? 1: output_to, to_node_id);
 
         if (data_flow) {
@@ -2228,9 +2261,9 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
 
         memset(reply_buffer_pointer, 0, sizeof(reply_buffer));
         sprintf(
-            reply_buffer_pointer, 
-            "GET_CLOCK:OK:%d:%d:%d-%d:%d:%d", 
-            rtc.getYear(), rtc.getMonth(), rtc.getDay(), 
+            reply_buffer_pointer,
+            "GET_CLOCK:OK:%d:%d:%d-%d:%d:%d",
+            rtc.getYear(), rtc.getMonth(), rtc.getDay(),
             rtc.getHours(), rtc.getMinutes(), rtc.getSeconds()
         );
 
@@ -2262,8 +2295,8 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
 
         memset(reply_buffer_pointer, 0, sizeof(reply_buffer));
         sprintf(
-            reply_buffer_pointer, 
-            "GET_SLEEP_MS:OK:%d", 
+            reply_buffer_pointer,
+            "GET_SLEEP_MS:OK:%d",
             sleep_ms
         );
 
@@ -2373,7 +2406,7 @@ void FemtoCore::_reply(char* message, byte output_to, int dest_node_id) {
     switch(output_to) {
         case 3:
             // To Network (broadcast);
-            
+
             sprintf(net_message, "=%s", message);
             broadcast((char*)net_message);
             break;
@@ -2402,7 +2435,7 @@ char FemtoCore::_serialBusyWait() {
 
 // See https://github.com/benrugg/Arduino-Hex-Decimal-Conversion/blob/master/hex_dec.ino
 unsigned int FemtoCore::hexToDec(String hexString) {
-  
+
   unsigned int decValue = 0;
   int nextInt;
   char chr;
@@ -2422,16 +2455,16 @@ unsigned int FemtoCore::hexToDec(String hexString) {
     if (is_valid_char) {
 
         nextInt = int(hexString.charAt(i));
-        
+
         if (nextInt >= 48 && nextInt <= 57) nextInt = map(nextInt, 48, 57, 0, 9);
         if (nextInt >= 65 && nextInt <= 70) nextInt = map(nextInt, 65, 70, 10, 15);
         if (nextInt >= 97 && nextInt <= 102) nextInt = map(nextInt, 97, 102, 10, 15);
         nextInt = constrain(nextInt, 0, 15);
-        
+
         decValue = (decValue * 16) + nextInt;
     }
   }
-  
+
   return decValue;
 }
 
@@ -2450,7 +2483,7 @@ void TC5_Handler (void) {
     TC5->COUNT16.INTFLAG.bit.MC0 = 1; //don't change this, it's part of the timer code
 }
 
-/* 
+/*
  *  TIMER SPECIFIC FUNCTIONS FOLLOW
  *  you shouldn't change these unless you know what you're doing
  */
@@ -2485,7 +2518,7 @@ void tcConfigure(int sampleRate)
     // Enable the TC5 interrupt request
     TC5->COUNT16.INTENSET.bit.MC0 = 1;
     while (tcIsSyncing()); //wait until TC5 is done syncing
-} 
+}
 
 //Function that is used to check if TC5 is done syncing
 //returns true when it is done syncing
@@ -2501,7 +2534,7 @@ void tcStartCounter()
     while (tcIsSyncing()); //wait until snyc'd
 }
 
-//Reset TC5 
+//Reset TC5
 void tcReset()
 {
     TC5->COUNT16.CTRLA.reg = TC_CTRLA_SWRST;
@@ -2530,9 +2563,11 @@ void serialEvent() {
 
         char inChar = (char) Serial.read();
 
-        inputString += inChar;
+	if (inChar != '\n') {
 
-        if (inChar == '\n') {
+	  inputString += inChar;
+
+	} else {
             #ifdef DEBUG
                 Serial.println("GLOBAL serialEvent() " + inputString);
             #endif
@@ -2542,13 +2577,13 @@ void serialEvent() {
 
             break;
         }
-        
+
     }
 }
 
 void resetBuffer(char* bufferData, int bufferSize) {
   char filler = (char) 0;
-  
+
   memset(bufferData, filler, bufferSize);
   bufferData[bufferSize] = '\0';
 }
