@@ -44,13 +44,13 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
-#ifndef _SAMD21_USB_COMPONENT_
-#define _SAMD21_USB_COMPONENT_
+#ifndef _SAMR21_USB_COMPONENT_
+#define _SAMR21_USB_COMPONENT_
 
 /* ========================================================================== */
 /**  SOFTWARE API DEFINITION FOR USB */
 /* ========================================================================== */
-/** \addtogroup SAMD21_USB Universal Serial Bus */
+/** \addtogroup SAMR21_USB Universal Serial Bus */
 /*@{*/
 
 #define USB_U2222
@@ -1804,4 +1804,4 @@ typedef union {
 
 /*@}*/
 
-#endif /* _SAMD21_USB_COMPONENT_ */
+#endif /* _SAMR21_USB_COMPONENT_ */
