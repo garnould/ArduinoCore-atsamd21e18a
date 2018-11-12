@@ -64,6 +64,8 @@ char    FemtoCore::_free_imu_network_data[APP_BUFFER_SIZE] = ""; // Used by proc
 char    FemtoCore::_free_imu_serial_data[FemtoCore::FREEIMU_OUTPUT_BUFFER_SIZE] = ""; // Used by processCommand(), FreeIMU stuff. In the original FreeIMU_serial_ARM_CPU sketch, the "str" char array was hard-coded to 128 characters.
 int     FemtoCore::_free_imu_raw_values[11]; // Buffer to hold FreeIMU raw value data.
 
+uint32_t FemtoCore::_serialNumber; // Initialized at init, receiving xor'ed SAM R21 serial number, 8.8.3 in https://www.mouser.com/ds/2/268/Atmel-42223-SAM-R21_Datasheet-1065540.pdf
+
 volatile bool FemtoCore::stringComplete  = false;      // whether the string is complete
 
 RTCZero FemtoCore::rtc;
@@ -83,6 +85,10 @@ void FemtoCore::init(int appAddress, int destAddress, int appEndpoint, int appPa
     _appSecurityKey = appSecurityKey;
 
     is_femtobeacon_coin = is_coin;
+
+    // dirty way
+    // Receiving xor'ed SAM R1 serial number, 8.8.3 in https://www.mouser.com/ds/2/268/Atmel-42223-SAM-R21_Datasheet-1065540.pdf
+    _serialNumber = (*(uint32_t *)(0x0080A00C)) ^ (*(uint32_t *)(0x0080A040)) ^ (*(uint32_t *)(0x0080A044)) ^ (*(uint32_t *)(0x0080A048)) ;
 
     #ifdef ENABLE_SERIAL
         _setupSerial();
@@ -1870,8 +1876,17 @@ void FemtoCore::processCommand(char* command_chars, byte input_from, byte output
         Serial.println("FemtoCore::processCommand checking for common commands");
     #endif
 
+    if(cmd=='s'){
+      // returning SAM R21 serial number
+      char* buffer = (output_to > 0) ? _free_imu_network_data : _free_imu_serial_data;
+      sprintf(buffer, "Serial number: 0x%08x", _serialNumber);
+
+      _reply(buffer, output_to < 1 ? 1 : output_to, to_node_id);
+      memset(buffer, 0, sizeof(buffer));
+    }
+
     // SET_NODE_ID:0x0001 Where range is 0x0001 to 0xfffe. 0xffff is reserved for broadcasts.
-    if (command.startsWith("SET_NODE_ID:")) {
+    else if (command.startsWith("SET_NODE_ID:")) {
         int node_id = hexToDec(inputString.substring(14)); // Discard 0x chars
 
         #ifdef DEBUG

@@ -50,6 +50,7 @@ You must issue a `SET_CONFIG` command after you are done issuing networking libr
 
 | Command (comm)        | Where | Params       | Info                                                    |
 |:---------------------:| ----- |:------------:| ------------------------------------------------------- |
+| s                     | All  | none | Returns the device serial number |
 | SET_REPEAT:flw:comm   | All  | int flow, comm| Repeat send. flw 0x00 = off, 0x01 = on. Comm is optional|
 | SET_NODE_ID:node_id   | All   | int node_id  | Sets internal node ID to `node_id` (0x0001-0xfffe)      |
 | SET_DEST_ID:node_id   | All   | int node_id  | Sets internal dest ID to `node_id` (0x0001-0xfffe)      |
@@ -95,7 +96,7 @@ Set TX Power for internal at86rf233 RF module. Default is 0x0 (+4 dbm)
 
 ## Peripheral library commands - Real Time Clock (RTC)
 
-You will need to call `START_RTC` before using any of these commands. 
+You will need to call `START_RTC` before using any of these commands.
 
 | Command                                  | Where | Params                 | Info                  |
 |:----------------------------------------:| ----- |:----------------------:| --------------------- |

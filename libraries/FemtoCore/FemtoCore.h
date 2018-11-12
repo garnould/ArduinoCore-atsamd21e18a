@@ -30,7 +30,7 @@
 
 
     /** BEGIN mjs513 fork https://github.com/femtoduino/FreeIMU-Updates library. **/
-    
+
     //#include "calibration.h" // Uncomment once you have calibrated your IMU, generated a calibration.h file and updated FreeIMU.h!
 
     #include <I2Cdev.h>
@@ -86,7 +86,7 @@
 
     /** Networking vars EOF **/
 
-    
+
     /** RGB timer stuff BOF **/
     // Should be fast enough to fake PWM the Red pin.
     #define FEMTO_RGB_MAX_DUTY_CYCLE 48
@@ -100,12 +100,12 @@
     void tcDisable();
 
     /** RGB timer stuff EOF **/
-    
 
-    class FemtoCore 
+
+    class FemtoCore
     {
         public:
-            
+
             /**
              * Constructor.
              */
@@ -115,10 +115,10 @@
             // Sensor peripherals (9-DoF Sensor, Precision Altimeter)
             // ... FreeIMU Serial commands.
 
-            // @TODO USB peripherals 
+            // @TODO USB peripherals
 
             // @TODO OTA Updates
-            
+
             /**
              *           -----+ Common Anode (Pad #1 TOP VIEW)
              *    +---+ +---+ |
@@ -165,7 +165,7 @@
             static const int FEMTO_ANTENNA_UFL = 2;
 
             /** BEGIN Serial Rx **/
-            
+
             static volatile bool   stringComplete;  // whether the string is complete
             /** END Serial Rx **/
 
@@ -198,7 +198,7 @@
             static const byte FEMTO_SENSOR_INT_I2C_MASTER_INTERRUPT = 0x10; // DEC 16
             static const byte FEMTO_SENSOR_INT_DATA_READY           = 0x20; // DEC 32
             /** Sleep/Wake EOF **/
-            
+
 
             /**
              * @param int appAddress This node's address.
@@ -210,12 +210,12 @@
              * @param bool is_coin If true, we identify as a FemtoBeacon coin (with sensors). False means it's a dongle (no sensors).
              */
             static void init(
-                int appAddress, 
-                int destAddress, 
-                int appEndpoint, 
-                int appPanID, 
-                int appChannel, 
-                char* appSecurityKey, 
+                int appAddress,
+                int destAddress,
+                int appEndpoint,
+                int appPanID,
+                int appChannel,
+                char* appSecurityKey,
                 bool is_coin);
 
             static void startRTC();
@@ -341,7 +341,7 @@
 
             static volatile long _rgbLastTick;
             static volatile long _rgbCurrentTick;
-            
+
 
             static volatile long _rgbRedTick;
             static volatile long _rgbGreenTick;
@@ -410,11 +410,15 @@
             static char    _free_imu_serial_data[FREEIMU_OUTPUT_BUFFER_SIZE]; // Used by processCommand(). In the original FreeIMU_serial_ARM_CPU sketch, the "str" char array was hard-coded to 128 characters.
             static int     _free_imu_raw_values[11]; // Buffer to hold FreeIMU raw value data.
 
+
+	    static uint32_t _serialNumber; // Initialized at init, receiving serial SAM R21 number, 8.8.3 in https://www.mouser.com/ds/2/268/Atmel-42223-SAM-R21_Datasheet-1065540.pdf
+
+
             static NWK_DataReq_t _sendRequest;
 
             static void _HSV_to_RGB(float h, float s, float v, byte* r, byte* g, byte* b);
 
-            
+
             static void _configureAntenna();
             static void _setupRGB();
             static void _setupSerial();

@@ -222,9 +222,16 @@ bool USBDeviceClass::sendDescriptor(USBSetup &setup)
 		else if (setup.wValueL == ISERIAL) {
 #ifdef PLUGGABLE_USB_ENABLED
 			char name[ISERIAL_MAX_LEN];
+  #ifdef __SAMR21E18A__
+			// dirty way
+			// Receiving xor'ed SAM R1 serial number, 8.8.3 in https://www.mouser.com/ds/2/268/Atmel-42223-SAM-R21_Datasheet-1065540.pdf
+			snprintf(name, ISERIAL_MAX_LEN, "%08x", (*(uint32_t *)(0x0080A00C)) ^ (*(uint32_t *)(0x0080A040)) ^ (*(uint32_t *)(0x0080A044)) ^ (*(uint32_t *)(0x0080A048)));
+  #else
 			PluggableUSB().getShortName(name);
+  #endif
 			return sendStringDescriptor((uint8_t*)name, setup.wLength);
 #endif
+
 		}
 		else {
 			return false;
@@ -942,4 +949,3 @@ void USBDeviceClass::ISRHandler()
 
 // USBDevice class instance
 USBDeviceClass USBDevice;
-

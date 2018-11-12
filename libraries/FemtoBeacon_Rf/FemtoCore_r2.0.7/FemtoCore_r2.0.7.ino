@@ -65,4 +65,3 @@ void loop() {
   FemtoCore::handleNetworking(); // Required to call SYS_TaskHandler() of LwMesh stack library (handles networking stuff).
   FemtoCore::handleSerial();
 }
-
