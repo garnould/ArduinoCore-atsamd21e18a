@@ -542,7 +542,7 @@ bool FemtoCore::_networkingReceiveMessage(NWK_DataInd_t *ind) {
         Serial.print((int)ind->size);
         Serial.print(") is ");
         Serial.println((char*)ind->data);
-    #endif;
+    #endif
 
     char* input_string = (char*)ind->data; // ind->data must by typecast from uint8_t* to char*
     String input = String(input_string);
@@ -1295,100 +1295,63 @@ bool FemtoCore::getIsNetworkBusy() {
 }
 
 void FemtoCore::sendSampleLegacy(byte input_from, byte output_to, int to_node_id) {
+    // output_buffer
+    //
+    //  - we're playing with fire here as output_buffer is 105 bytes large
+    //
+    //    - atmel-lwm/src/lwm/nwk/nwkSecurity.h:59 > #define NWK_SECURITY_MIC_SIZE 4
+    //    - atmel-lwm/src/lwm/nwk/nwk.h:63 > #define NWK_MAX_PAYLOAD_SIZE (127 - 16/*NwkFrameHeader_t*/ - 2/*crc*/)
+    //    - FemtoCore/FemtoCore.h:71 >  #define APP_BUFFER_SIZE (NWK_MAX_PAYLOAD_SIZE - NWK_SECURITY_MIC_SIZE)
+    //
+    //  - example of output : 75 bytes including \0
+    //
+    //    - 300122,-2.9067,0.0036,0.1924,336.7409,0.1701,348.8600,-0.3685,0.3536,0.7139
+
+    char output_buffer[APP_BUFFER_SIZE];
+
+    // binary values
 
     float ypr[3]; // Hold the YPR data (YPR 180 deg)
     float eulers[3]; // Hold the Euler angles (360 deg)
     float values[10]; // Raw values from FreeIMU
-    float baro_reading;
-    float temp_reading;
-    float pressure_reading;
 
-    unsigned long current_ms; // Read the current millis() reading.
-    char c_current_ms[16];
-    char* c_current_ms_pointer = (char*) c_current_ms;
-
-    char c_yaw[5];
-    char c_pitch[5];
-    char c_roll[5];
-    char c_euler1[10];
-    char c_euler2[10];
-    char c_euler3[10];
-    char c_accel_x[10];
-    char c_accel_y[10];
-    char c_accel_z[10];
-    // char c_barometer[];
-    // char c_temperature[];
-    // char c_pressure[];
-
-    char data[APP_BUFFER_SIZE];
-    char* data_pointer;
-
-    current_ms = millis();
-    sprintf(c_current_ms_pointer, "%d", current_ms);
-    // c_current_ms = const_cast<char*>(strCurrentMS.c_str());
-
-    // c_current_ms = strCurrentMS.c_str();
+    // getting binary values from freeIMU
 
     freeIMU.getYawPitchRoll180(ypr);
     freeIMU.getEuler360deg(eulers);
     freeIMU.getValues(values);
 
-    // baro = freeIMU.getBaroAlt(); // Returns an altitude estimate from barometer readings only using sea_press as current sea level pressure
-    // temp = freeIMU.getBaroTemperature();
-    // pressure = freeIMU.getBaroPressure();
+    // packing that stuff
+    // using snprintf that could discard chars if result is too long (at least we'd avoid 'segfaulting')
+    // @TODO :
+    //   - detect when snprintf had to discard chars (by adding a tailing # and checking for it on output ?)
+    //   - choose a way to notify client we're unable to produce output (limited by APP_BUFFER_SIZE)
 
-    dtostrf(ypr[0], 0, 4, c_yaw); // Up to 4 decimal places
-    dtostrf(ypr[1], 0, 4, c_pitch);
-    dtostrf(ypr[2], 0, 4, c_roll);
+    snprintf( output_buffer,
+	      sizeof(output_buffer),
+              "%d,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f",
+	      millis(),
+	      ypr[0],
+	      ypr[1],
+	      ypr[2],
+	      eulers[0],
+	      eulers[1],
+	      eulers[2],
+	      values[0],
+	      values[1],
+	      values[2] ) ;
 
-    dtostrf(eulers[0], 0, 4, c_euler1);
-    dtostrf(eulers[1], 0, 4, c_euler2);
-    dtostrf(eulers[2], 0, 4, c_euler3);
-
-    dtostrf(values[0], 0, 4, c_accel_x);
-    dtostrf(values[1], 0, 4, c_accel_y);
-    dtostrf(values[2], 0, 4, c_accel_z);
-
-    // data = c_current_ms + ',' + c_yaw + ',' + c_pitch + ',' + c_roll;
-    // data += ',' + c_euler1 + ',' + c_euler2 + ',' + c_euler3;
-    // data += ',' + c_accel_x + ',' + c_accel_y + ',' + c_accel_z + '\n';
     #ifdef DEBUG
-        Serial.println("FemtoCore::sendSampleLegacy() converting to char array...");
-        Serial.print('\t');
-        Serial.print(c_current_ms);Serial.print(',');
-        Serial.print(c_yaw); Serial.print(',');
-        Serial.print(c_pitch); Serial.print(',');
-        Serial.print(c_roll); Serial.print(',');
-        Serial.print(c_euler1); Serial.print(',');
-        Serial.print(c_euler2); Serial.print(',');
-        Serial.print(c_euler3); Serial.print(',');
-        Serial.print(c_accel_x); Serial.print(',');
-        Serial.print(c_accel_y); Serial.print(',');
-        Serial.println(c_accel_z);
+        Serial.print("FemtoCore::sendSampleLegacy() replying with '");
+        Serial.print(output_buffer);
+        Serial.println("'\n");
     #endif
-    sprintf(data,
-        "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\0",
-        c_current_ms,
-        c_yaw, c_pitch, c_roll,
-        c_euler1, c_euler2, c_euler3,
-        c_accel_x, c_accel_y, c_accel_z);
 
-    // Send away.
-    data_pointer = (char*) data;
-    // send(data_pointer, destNodeAddress);
-    _reply(data_pointer, output_to < 1 ? 1 : output_to, to_node_id);
-    memset(data_pointer, 0, sizeof(data));
-    memset(c_current_ms_pointer, 0, sizeof(current_ms));
-    memset((char*)c_yaw, 0, sizeof(c_yaw));
-    memset((char*)c_pitch, 0, sizeof(c_pitch));
-    memset((char*)c_roll, 0, sizeof(c_roll));
-    memset((char*)c_euler1, 0, sizeof(c_euler1));
-    memset((char*)c_euler2, 0, sizeof(c_euler2));
-    memset((char*)c_euler3, 0, sizeof(c_euler3));
-    memset((char*)c_accel_x, 0, sizeof(c_accel_x));
-    memset((char*)c_accel_y, 0, sizeof(c_accel_y));
-    memset((char*)c_accel_z, 0, sizeof(c_accel_z));
+    // sending reply
+
+    _reply(output_buffer, output_to < 1 ? 1 : output_to, to_node_id);
 }
+
 /**
  * Process a command.
  * @param char* cmd Pointer to the char array representing the command
